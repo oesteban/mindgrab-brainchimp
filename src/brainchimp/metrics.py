@@ -6,6 +6,8 @@ Ref
     - https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.binary_erosion.html
 """
 
+from time import perf_counter
+
 import numpy as np
 from scipy import ndimage
 
@@ -14,28 +16,16 @@ def dice(mask_truth, mask_pred):
     if mask_truth.shape != mask_pred.shape:
         raise ValueError("Mask have not the same shape")
 
-    if mask_truth.sum() == 0 and mask_pred.sum() == 0:
+    sum_t = np.count_nonzero(mask_truth)  # TP + FN
+    sum_p = np.count_nonzero(mask_pred)  # TP + FP
+
+    if sum_t == 0 and sum_p == 0:
         return 1
 
-    TP = 0
-    FP = 0
-    FN = 0
+    tp = np.count_nonzero(mask_truth & mask_pred)
+    den = sum_t + sum_p  # TP + FN + TP + FP = 2*TP + FN + FP
 
-    for i in range(mask_truth.shape[0]):
-        for j in range(mask_truth.shape[1]):
-            for k in range(mask_truth.shape[2]):
-                T = mask_truth[i][j][k]
-                P = mask_pred[i][j][k]
-                if T == P:
-                    if T:
-                        TP += 1
-                else:
-                    if P:
-                        FP += 1
-                    else:
-                        FN += 1
-
-    return 2 * TP / (2 * TP + FP + FN)
+    return 2 * tp / den
 
 
 def hd95(mask_truth, mask_pred, voxel_size):
@@ -86,4 +76,28 @@ def volume_error(mask_truth, mask_pred, voxel_size):
 
 
 if __name__ == "__main__":
-    pass
+    size = 256
+    nb_iter = 100
+
+    truth = np.zeros((size, size, size), dtype=bool)
+    pred = np.zeros_like(truth)
+
+    truth[0, 0, 0] = True
+    truth[0, 0, 1] = True
+    truth[0, 0, 2] = True
+
+    pred[0, 0, 0] = True
+    pred[0, 0, 1] = True
+
+    tot_time = np.zeros(nb_iter)
+
+    start = perf_counter()
+    for i in range(nb_iter):
+        t = perf_counter()
+        res = dice(truth, pred)
+        tot_time[i] = perf_counter() - t
+        print(f"{i}: {res}")
+        assert res == (4 / 5)
+
+    print(f"avg time: {(np.average(tot_time) * 1000):.2}ms ± {(np.std(tot_time) * 1000):.3}ms")
+    print(f"total time: {(perf_counter() - start):.2}s")
